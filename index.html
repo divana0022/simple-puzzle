@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sliding Puzzle</title>
+  <meta name="description" content="A simple sliding puzzle game with image, move counter, timer, and size selector." />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0b12;
+      --card: #141420;
+      --accent: #6d5efc;
+      --text: #e8e8ef;
+      --muted: #a7a7bb;
+      --good: #3dd68c;
+      --danger: #ff6b6b;
+      --grid-gap: 6px;
+    }
+    * { box-sizing: border-box }
+    html, body { height: 100% }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 20% -10%, #1b1b2c 0%, #0b0b12 60%), var(--bg);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 20px;
+    }
+    .app {
+      width: min(980px, 100%);
+      display: grid;
+      gap: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    h1 { margin: 0; font-weight: 800; letter-spacing: 0.2px; font-size: clamp(20px, 3vw, 28px); }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    }
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px; 
+    }
+    .toolbar .group { display: flex; gap: 8px; align-items: center; background: var(--card); padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.07)}
+    label { color: var(--muted); font-size: 13px }
+    input[type="text"], select {
+      background: #0f0f18; color: var(--text); border: 1px solid rgba(255,255,255,0.1);
+      padding: 8px 10px; border-radius: 10px; outline: none; min-width: 120px;
+    }
+    button {
+      background: var(--accent); color: white; border: none; padding: 10px 14px; border-radius: 12px; font-weight: 600; cursor: pointer;
+      transition: transform .08s ease, filter .2s ease, background .2s; user-select: none;
+    }
+    button:hover { filter: brightness(1.05) }
+    button:active { transform: translateY(1px) }
+    .btn-secondary { background: #1f1f2d }
+
+    .grid-wrap { position: relative; display: grid; grid-template-columns: 1fr; gap: 10px; }
+    .grid {
+      position: relative;
+      aspect-ratio: 1/1;
+      display: grid;
+      gap: var(--grid-gap);
+      background: #10101a;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.08);
+      overflow: hidden;
+    }
+    .tile {
+      position: relative;
+      display: grid; place-items: center;
+      font-weight: 800;
+      border-radius: 10px;
+      background: #222234;
+      color: #fff;
+      user-select: none;
+      cursor: pointer;
+      transition: transform .18s ease;
+      overflow: hidden;
+      outline: 1px solid rgba(255,255,255,0.06);
+    }
+    .tile.is-empty { background: #0f0f18; cursor: default; outline-style: dashed; color: transparent }
+    .tile:hover:not(.is-empty) { transform: translateY(-1px) }
+
+    .thumb-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px }
+    .thumb {
+      aspect-ratio: 16/10; border-radius: 10px; overflow: hidden; position: relative; border: 1px solid rgba(255,255,255,0.08);
+      cursor: pointer;
+    }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; display: block }
+    .stats { display:flex; gap: 14px; flex-wrap: wrap; align-items:center }
+    .pill { background: #1a1a28; border: 1px solid rgba(255,255,255,0.08); padding: 8px 12px; border-radius: 100px; font-weight: 600 }
+    .pill.good { background: rgba(61,214,140,0.1); border-color: rgba(61,214,140,0.35); color: #b7f7d8 }
+
+    .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #181828; color: #fff; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); display:none }
+    .modal { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.5); visibility: hidden; opacity: 0; transition: opacity .2s ease }
+    .modal.show { visibility: visible; opacity: 1 }
+    .modal-card { background: #10101a; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 18px; width: min(520px, 92vw) }
+
+    .footer { color: var(--muted); text-align: center; font-size: 12px; margin-top: 4px }
+    .link { color: #84a9ff; text-decoration: none }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <h1>Sliding Puzzle</h1>
+      <div class="stats">
+        <div class="pill" id="movesPill">Moves: 0</div>
+        <div class="pill" id="timePill">Time: 00:00</div>
+        <div class="pill" id="sizePill">Size: 3×3</div>
+      </div>
+    </div>
+
+    <div class="card toolbar">
+      <div class="group">
+        <label for="size">Grid</label>
+        <select id="size">
+          <option value="3">3 × 3</option>
+          <option value="4">4 × 4</option>
+          <option value="5">5 × 5</option>
+        </select>
+      </div>
+      <div class="group">
+        <label for="imgUrl">Image</label>
+        <input id="imgUrl" type="text" placeholder="https://picsum.photos/600" value="https://picsum.photos/800?random=8"/>
+        <button id="loadImg" class="btn-secondary">Load</button>
+      </div>
+      <button id="shuffleBtn">Shuffle</button>
+      <button id="newGameBtn" class="btn-secondary">New Game</button>
+    </div>
+
+    <div class="grid-wrap">
+      <div id="grid" class="grid"></div>
+    </div>
+
+    <div class="card" style="padding:12px">
+      <div class="thumb-row" id="thumbRow"></div>
+    </div>
+
+    <div class="footer">Made with ♥ — deploy this single file to Vercel. | <a class="link" href="https://picsum.photos" target="_blank" rel="noreferrer">Images: Picsum</a></div>
+  </div>
+
+  <div id="modal" class="modal">
+    <div class="modal-card">
+      <h2 style="margin:0 0 8px 0">🎉 Puzzle Solved!</h2>
+      <p style="margin:0 0 12px 0; color: var(--muted)">Great job. Want to try a different size or image?</p>
+      <div style="display:flex; gap:10px; flex-wrap: wrap">
+        <button id="againBtn">Play Again</button>
+        <button id="closeModal" class="btn-secondary">Close</button>
+        <button id="shareBtn" class="btn-secondary">Share</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // --- Utility helpers ---
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+    const pad = (n) => String(n).padStart(2, '0');
+
+    // --- Game state ---
+    let N = 3;                       // grid size (N x N)
+    let tiles = [];                  // tile order (0..N*N-1), last index is the empty slot
+    let img = new Image();           // source image
+    let moves = 0;                   // moves count
+    let timer = 0;                   // seconds
+    let timerId = null;              // interval
+
+    const grid = $('#grid');
+    const movesPill = $('#movesPill');
+    const timePill = $('#timePill');
+    const sizePill = $('#sizePill');
+    const toast = $('#toast');
+
+    // Sample thumbnails
+    const thumbs = [
+      'https://picsum.photos/id/1025/800/600',
+      'https://picsum.photos/id/1005/800/600',
+      'https://picsum.photos/id/1018/800/600',
+      'https://picsum.photos/id/1039/800/600',
+      'https://picsum.photos/id/1050/800/600'
+    ];
+
+    function showToast(msg) {
+      toast.textContent = msg; toast.style.display = 'block';
+      setTimeout(() => toast.style.display = 'none', 1600);
+    }
+
+    function startTimer() {
+      if (timerId) clearInterval(timerId);
+      timer = 0; timePill.textContent = 'Time: 00:00';
+      timerId = setInterval(() => {
+        timer++; const m = Math.floor(timer/60), s = timer%60;
+        timePill.textContent = `Time: ${pad(m)}:${pad(s)}`;
+      }, 1000);
+    }
+
+    function stopTimer() { if (timerId) clearInterval(timerId); timerId = null; }
+
+    function updateHUD() {
+      movesPill.textContent = `Moves: ${moves}`;
+      sizePill.textContent = `Size: ${N}×${N}`;
+    }
+
+    function isSolvable(arr) {
+      // Classic sliding puzzle solvability check
+      const inv = arr.filter(v => v !== arr.length-1); // exclude empty
+      let inversions = 0;
+      for (let i=0; i<inv.length; i++) {
+        for (let j=i+1; j<inv.length; j++) if (inv[i] > inv[j]) inversions++;
+      }
+      if (N % 2 === 1) return inversions % 2 === 0; // odd grid
+      const emptyRowFromBottom = N - Math.floor(arr.indexOf(N*N-1) / N);
+      if (emptyRowFromBottom % 2 === 0) return inversions % 2 === 1; // even grid, blank on even row from bottom
+      return inversions % 2 === 0; // even grid, blank on odd row from bottom
+    }
+
+    function shuffleTiles() {
+      // Generate a random solvable permutation
+      const total = N*N; let arr = [...Array(total).keys()];
+      do {
+        for (let i = total-1; i>0; i--) { const j = Math.floor(Math.random()*(i+1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+      } while (!isSolvable(arr));
+      return arr;
+    }
+
+    function drawGrid() {
+      grid.style.gridTemplateColumns = `repeat(${N}, 1fr)`;
+      grid.innerHTML = '';
+      const size = grid.clientWidth; // for background positioning
+      tiles.forEach((val, idx) => {
+        const tile = document.createElement('div');
+        tile.className = 'tile';
+        if (val === N*N-1) tile.classList.add('is-empty');
+        tile.dataset.index = idx;
+
+        // Background crop logic
+        const x = val % N, y = Math.floor(val / N);
+        const bgX = (x/(N-1))*100; const bgY = (y/(N-1))*100;
+        if (val !== N*N-1) {
+          tile.style.backgroundImage = `url(${img.src})`;
+          tile.style.backgroundSize = `${N*100}% ${N*100}%`;
+          tile.style.backgroundPosition = `${bgX}% ${bgY}%`;
+        }
+
+        tile.addEventListener('click', onTileClick);
+        grid.appendChild(tile);
+      });
+    }
+
+    function swap(i, j) { [tiles[i], tiles[j]] = [tiles[j], tiles[i]]; }
+
+    function neighbors(i) {
+      const res = []; const row = Math.floor(i/N), col = i%N; const empty = tiles.indexOf(N*N-1);
+      const er = Math.floor(empty/N), ec = empty%N;
+      if (row === er && Math.abs(col-ec) === 1) res.push(empty);
+      if (col === ec && Math.abs(row-er) === 1) res.push(empty);
+      return res;
+    }
+
+    function onTileClick(e) {
+      const i = Number(e.currentTarget.dataset.index);
+      const nb = neighbors(i)[0];
+      if (nb === undefined) return;
+      swap(i, nb); moves++; updateHUD(); drawGrid();
+      if (isSolved()) {
+        stopTimer();
+        $('#modal').classList.add('show');
+        $('.pill.good')?.classList.remove('good');
+        movesPill.classList.add('good');
+      }
+    }
+
+    function isSolved() { return tiles.every((v, i) => v === i); }
+
+    function newGame() {
+      moves = 0; updateHUD(); startTimer();
+      tiles = shuffleTiles(); drawGrid();
+    }
+
+    function setSize(n) { N = n; sizePill.textContent = `Size: ${N}×${N}`; newGame(); }
+
+    function loadImage(url) {
+      return new Promise((resolve, reject) => {
+        const test = new Image();
+        test.crossOrigin = 'anonymous';
+        test.onload = () => resolve(url);
+        test.onerror = reject;
+        test.src = url;
+      });
+    }
+
+    // --- Event wiring ---
+    $('#shuffleBtn').addEventListener('click', () => { tiles = shuffleTiles(); moves = 0; updateHUD(); drawGrid(); startTimer(); showToast('Shuffled!'); });
+    $('#newGameBtn').addEventListener('click', newGame);
+    $('#size').addEventListener('change', (e) => setSize(Number(e.target.value)));
+    $('#loadImg').addEventListener('click', async () => {
+      const url = $('#imgUrl').value.trim();
+      try {
+        await loadImage(url); img.src = url; drawGrid(); showToast('Image loaded');
+      } catch {
+        showToast('Failed to load image');
+      }
+    });
+    $('#againBtn').addEventListener('click', () => { $('#modal').classList.remove('show'); newGame(); });
+    $('#closeModal').addEventListener('click', () => $('#modal').classList.remove('show'));
+    $('#shareBtn').addEventListener('click', async () => {
+      const text = `I solved a ${N}×${N} sliding puzzle in ${moves} moves and ${pad(Math.floor(timer/60))}:${pad(timer%60)}!`;
+      const shareUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(text)}&embeds[]=${encodeURIComponent(location.href)}`;
+      window.open(shareUrl, '_blank');
+    });
+
+    // Populate thumbnails
+    const thumbRow = $('#thumbRow');
+    thumbs.forEach(u => {
+      const d = document.createElement('div'); d.className = 'thumb';
+      const im = document.createElement('img'); im.src = u; d.appendChild(im);
+      d.addEventListener('click', async () => { try { await loadImage(u); img.src = u; drawGrid(); showToast('Image loaded'); } catch {} });
+      thumbRow.appendChild(d);
+    });
+
+    // Init
+    (async function init() {
+      img.src = $('#imgUrl').value;
+      await new Promise(r => img.onload = r);
+      setSize(3);
+    })();
+  </script>
+</body>
+</html>
